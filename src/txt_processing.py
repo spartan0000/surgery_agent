@@ -4,11 +4,25 @@ import json
 from openai import OpenAI
 import time
 import os
-
+import chromadb
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+chroma_client = chromadb.PersistentClient(path=BASE_DIR / "data" / "chroma_db")
+
+
+
+def get_or_create_collection():
+    collection = chroma_client.get_or_create_collection(
+        name="surgery_text_collection",
+        metadata={"hnsw:space": "cosine"}
+    )
+    return collection
 
 def combine_text_files():
 
@@ -82,6 +96,20 @@ def embed_openai(text):
         input = text
     )
     return response.data[0].embedding
+
+
+
+def add_embeddings_to_collection():
+    collection = get_or_create_collection()
+
+    with open(BASE_DIR / "data" / "c_chunks_with_embeddings.json", "r", encoding="utf-8") as f:
+        embeddings = json.load(f)
+
+    collection.add(
+        embeddings = [c['embedding'] for c in embeddings],
+        documents = [c['text'] for c in embeddings],
+        ids = [f"chunk_{i}" for i in range(len(embeddings))]
+    )
 
 if __name__ == "__main__":
     text = Path("data/c_combined_text.txt").read_text(encoding = "latin-1")

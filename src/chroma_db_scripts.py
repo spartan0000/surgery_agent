@@ -1,34 +1,40 @@
 import chromadb
 import json
 from pathlib import Path
-from src.txt_processing import embed_open_ai
+from src.txt_processing import embed_openai
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 
 
-chroma_client = chromadb.PersistentClient(path=DATA_DIR / "chroma_db")
 
-collection = chroma_client.get_or_create_collection(
-    name="surgery_text_collection",
-    metadata={"hnsw:space": "cosine"}
-)
+def get_collection():
+    chroma_client = chromadb.PersistentClient(path=DATA_DIR / "chroma_db")
+    collection = chroma_client.get_collection("surgery_text_collection")
 
-
-def add_embeddings_to_collection():
-    with open(DATA_DIR / "c_chunks_with_embeddings.json", "r", encoding="utf-8") as f:
-        embeddings = json.load(f)
-
-    collection.add(
-        embeddings = [c['embedding'] for c in embeddings],
-        documents = [c['text'] for c in embeddings],
-        ids = [f"chunk_{i}" for i in range(len(embeddings))]
-    )
+    return collection
 
 def retrieve(query, n_results = 5):
-    query_embedding = embed_open_ai(query)
+    collection = get_collection()
+    query_embedding = embed_openai(query)
     results = collection.query(
         query_embeddings = [query_embedding],
         n_results = n_results
     )
     return results['documents'][0]
+
+
+def test_retrieval(query, n_results = 5):
+    collection = get_collection()
+    query_embedding = embed_openai(query)
+    results = collection.query(
+        query_embeddings = [query_embedding],
+        n_results = n_results
+    )
+
+    return results['documents'][0]
+
+if __name__ == "__main__":
+    results = test_retrieval("what is the screening protocol for someone with esophageal varices")
+    for i, chunk in enumerate(results):
+        print(f"Result {i+1}: {chunk[:200]}\n")
