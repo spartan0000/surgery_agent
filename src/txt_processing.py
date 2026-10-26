@@ -99,7 +99,7 @@ def embed_openai(text):
 
 
 
-def add_embeddings_to_collection():
+def embed_surgical_text():
     collection = get_or_create_collection()
 
     with open(BASE_DIR / "data" / "c_chunks_with_embeddings.json", "r", encoding="utf-8") as f:

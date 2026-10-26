@@ -8,14 +8,19 @@ DATA_DIR = BASE_DIR / "data"
 
 
 
-def get_collection():
+def get_surgery_text_collection():
     chroma_client = chromadb.PersistentClient(path=DATA_DIR / "chroma_db")
     collection = chroma_client.get_collection("surgery_text_collection")
 
     return collection
 
+def get_cochrane_collection():
+    chroma_client = chromadb.PersistentClient(path=DATA_DIR / "chroma_db")
+    collection = chroma_client.get_collection("cochrane_reviews")
+    return collection
+
 def retrieve(query, n_results = 5):
-    collection = get_collection()
+    collection = get_surgery_text_collection()
     query_embedding = embed_openai(query)
     results = collection.query(
         query_embeddings = [query_embedding],
@@ -25,7 +30,7 @@ def retrieve(query, n_results = 5):
 
 
 def test_retrieval(query, n_results = 5):
-    collection = get_collection()
+    collection = get_surgery_text_collection()
     query_embedding = embed_openai(query)
     results = collection.query(
         query_embeddings = [query_embedding],

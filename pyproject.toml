@@ -8,5 +8,6 @@ dependencies = [
     "anthropic>=2.3.0",
     "chromadb>=1.5.9",
     "openai>=3.37.0",
+    "pandas>=3.1.0",
     "python-dotenv>=1.2.4",
 ]
