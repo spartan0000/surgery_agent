@@ -34,13 +34,33 @@ def retrieve_surgical_text(query, n_results = 5):
     )
     return results['documents'][0]
 
+def retrieve_cochrane(query, n_results = 5):
+    embeddings = openai_client.embeddings.create(
+        model = 'text-embedding-3-small',
+        input = query
+    ).data[0].embedding
+
+    results = collection.query(
+        query_embeddings = embeddings,
+        n_results = n_results,
+        include = ['documents', 'metadatas']
+    )
+
+    return list(zip(results['documents'][0], results['metadatas'][0]))
+    
+
 ### Tools
 @beta_tool
 def search_surgical_textbook(query:str) -> str:
     """Search the surgical textbook for information about surgical procedures, anatomy, pathophysiology
     diagnostic tools or tests, indications for intervention, technique, recovery, and possible complications.
     Use this for specific surgical knowledge questions"""
+    print(f"[TEXTBOOK TOOL] query: {query}")
+
     chunks = retrieve_surgical_text(query)
+    
+    print(f"[TEXTBOOK TOOL] returned {len(chunks)} chunks")
+
     return json.dumps({"results": chunks})
 
 @beta_tool
@@ -58,7 +78,18 @@ def calculate_bmi(height_cm:float, weight_kg:float, height_units:str = "cm", wei
 
     return weight / (height / 100)**2
 
+@beta_tool
+def search_cochrane_citations(query: str) -> str:
+    """Search Cochrane systematic reviews for high quality synthesized clinical evidence.
+    Use for questions about treatment effectiveness, comparative outcomes, evidenced based treatment options,
+    evidence based diagnostic studies"""
+    print(f"[COCHRANE TOOL] query: {query}")
 
+    results = retrieve_cochrane(query)
+
+    print(f"[COCHRANE TOOL] returned {len(results)} chunks")
+
+    return json.dumps({'results': results, 'source': 'cochrane'})
 
 
 
@@ -76,15 +107,20 @@ Rules:
 5. Always recommend expert clinical judgement and consulting a qualified healthcare professional for any patient decisions"""
 
 def ask(question: str) -> str:
-    response = claude.beta.messages.tool_runner(
+    runner = claude.beta.messages.tool_runner(
         model = "claude-sonnet-4-6",
         max_tokens = 2048,
         system = SYSTEM,
-        tools = [search_surgical_textbook, calculate_bmi],
+        tools = [search_surgical_textbook, calculate_bmi, search_cochrane_citations],
         messages = [{'role': 'user', 'content': question}]
     )
+    response = runner.until_done()
     return response.content[0].text
 
 
 if __name__ == "__main__":
-    print(ask("what do i do with gallstones"))
+    res = ask("what is the best treatment option for recurrent melanoma")
+    print(res) #pulling the text response so that we can use the raw response below
+                                #will have to change this at some point
+
+    
