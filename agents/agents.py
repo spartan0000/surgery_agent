@@ -118,6 +118,58 @@ def ask(question: str) -> str:
     return response.content[0].text
 
 
+
+
+###
+### Testing a conversation functionality
+class SurgicalChatbot:
+    def __init__(self):
+        self.messages = []
+    
+    def ask(self, question: str) -> str:
+        # Add user message to history
+        self.messages.append({
+            "role": "user",
+            "content": question
+        })
+        
+        runner = claude.beta.messages.tool_runner(
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
+            system=SYSTEM,
+            tools=[search_surgical_textbook, search_cochrane_citations, calculate_bmi],
+            messages=self.messages
+        )
+        
+        result = runner.until_done()
+        answer = result.content[0].text
+        
+        #Add assistant response to history
+        self.messages.append({
+            "role": "assistant",
+            "content": answer
+        })
+        
+        return answer
+    
+    def reset(self):
+        """Start a new conversation"""
+        self.messages = []
+        print("Conversation reset")
+    
+    def history(self):
+        """Print conversation so far"""
+        for msg in self.messages:
+            role = "You" if msg["role"] == "user" else "Assistant"
+            print(f"\n{role}: {msg['content'][:200]}...")
+
+
+
+
+
+
+
+
 if __name__ == "__main__":
     res = ask("what is the best treatment option for recurrent melanoma")
     print(res) #pulling the text response so that we can use the raw response below
