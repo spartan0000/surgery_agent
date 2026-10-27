@@ -106,11 +106,11 @@ Knowledge sources:
 
 Rules:
 1. Always search the appropriate source before answering:
-   - Surgical questions → search the textbook
-   - Evidence or outcomes questions → search Cochrane reviews
-   - Questions involving both → search both sources
+   - Surgical questions - search the textbook
+   - Evidence or outcomes questions - search Cochrane reviews
+   - Questions involving both - search both sources
 2. Ground your answers in the retrieved content but use your knowledge to explain and synthesize clearly
-3. Always cite your source — textbook for operative knowledge, Cochrane review title and year for evidence
+3. Always cite your source - textbook for operative knowledge, Cochrane review title and year for evidence
 4. If neither source contains relevant information, say so clearly
 5. Never provide specific clinical advice for individual patients
 6. Always recommend clinical judgment and consultation with a qualified surgeon for patient decisions
@@ -143,6 +143,8 @@ class SurgicalChatbot:
             "role": "user",
             "content": question
         })
+
+        
         
         runner = claude.beta.messages.tool_runner(
             model="claude-sonnet-4-6",
@@ -162,6 +164,30 @@ class SurgicalChatbot:
         })
         
         return answer
+
+    def ask_streaming(self, question:str) -> str:
+        self.messages.append({
+            "role":"user",
+            "content": question
+        })
+
+        full_response = ""
+
+        with claude.messages.stream(
+            model = "claude-sonnet-4-6",
+            max_tokens = 2048,
+            system = SYSTEM,
+            tools = [search_surgical_textbook, search_cochrane_citations, calculate_bmi],
+            messages = self.messages
+        ) as stream:
+            for text in stream.text_stream:
+                print(text, end = "", flush = True)
+                full_response += text
+
+        self.messages.append({
+            "role":"assistant",
+            "content": full_response
+        })        
     
     def reset(self):
         """Start a new conversation"""
