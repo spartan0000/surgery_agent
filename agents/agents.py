@@ -4,7 +4,8 @@ import os
 import chromadb
 from openai import OpenAI
 from pathlib import Path
-from src.chroma_db_scripts import get_surgery_text_collection
+from src.chroma_db_scripts import get_surgery_text_collection, get_cochrane_collection
+from agents.agent_tools import tool_definitions
 
 from dotenv import load_dotenv
 
@@ -19,7 +20,8 @@ claude = Anthropic(
 openai_client = OpenAI(api_key = os.getenv("OPENAI_API_KEY"))
 
 chroma_client = chromadb.PersistentClient(path = BASE_DIR / "data" / "chroma_db")
-collection = get_surgery_text_collection()
+text_collection = get_surgery_text_collection()
+cochrane_collection = get_cochrane_collection()
 
 ### Retrieval functions
 def retrieve_surgical_text(query, n_results = 5):
@@ -28,7 +30,7 @@ def retrieve_surgical_text(query, n_results = 5):
         input = query
     ).data[0].embedding
 
-    results = collection.query(
+    results = text_collection.query(
         query_embeddings = embeddings,
         n_results = n_results
     )
@@ -40,7 +42,7 @@ def retrieve_cochrane(query, n_results = 5):
         input = query
     ).data[0].embedding
 
-    results = collection.query(
+    results = cochrane_collection.query(
         query_embeddings = embeddings,
         n_results = n_results,
         include = ['documents', 'metadatas']
@@ -96,13 +98,14 @@ def search_cochrane_citations(query: str) -> str:
 
 
 
-### Agent
+### Agents
 
 SYSTEM = """You are a surgical education assistant with access to a surgical textbook and Cochrane systematic reviews.
 
 Knowledge sources:
 - Surgical textbook: operative techniques, anatomy, procedures, complications, surgical decision making
 - Cochrane reviews: high quality synthesized clinical evidence, treatment outcomes, comparative effectiveness
+- A BMI calculator function if needed
 
 Rules:
 1. Always search the appropriate source before answering:
@@ -132,7 +135,7 @@ def ask(question: str) -> str:
 
 
 ###
-### Testing a conversation functionality
+### Testing a conversation functionality - non streaming agent
 class SurgicalChatbot:
     def __init__(self):
         self.messages = []
@@ -155,40 +158,22 @@ class SurgicalChatbot:
         )
         
         result = runner.until_done()
-        answer = result.content[0].text
-        
+
+        full_response = ""
+        for block in result.content:
+            if hasattr(block, 'text') and block.text:
+                full_response += block.text
+
+        print(full_response)
         #Add assistant response to history
         self.messages.append({
             "role": "assistant",
-            "content": answer
+            "content": full_response
         })
         
-        return answer
+        return full_response
 
-    def ask_streaming(self, question:str) -> str:
-        self.messages.append({
-            "role":"user",
-            "content": question
-        })
-
-        full_response = ""
-
-        with claude.messages.stream(
-            model = "claude-sonnet-4-6",
-            max_tokens = 2048,
-            system = SYSTEM,
-            tools = [search_surgical_textbook, search_cochrane_citations, calculate_bmi],
-            messages = self.messages
-        ) as stream:
-            for text in stream.text_stream:
-                print(text, end = "", flush = True)
-                full_response += text
-
-        self.messages.append({
-            "role":"assistant",
-            "content": full_response
-        })        
-    
+       
     def reset(self):
         """Start a new conversation"""
         self.messages = []
@@ -196,20 +181,135 @@ class SurgicalChatbot:
     
     def history(self):
         """Print conversation so far"""
+        if not self.messages:
+            print("No conversation history yet")
+            return
+        
         for msg in self.messages:
             role = "You" if msg["role"] == "user" else "Assistant"
-            print(f"\n{role}: {msg['content'][:200]}...")
+            print(f"\n{role}: {msg['content'][:200]}")
+            if len(msg['content']) > 200:
+                print("...")
 
 
+###
+#Streaming agent - lots more code unfortunately...
+class SurgicalChatbotStreaming:
+    def __init__(self):
+        self.messages = []
+    
+    def ask(self, question: str) -> str:
+        self.messages.append({
+            "role": "user",
+            "content": question
+        })
+        
+        full_response = ""
+        
+        while True:
+            with claude.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=2048,
+                system=SYSTEM,
+                tools=tool_definitions,  # JSON schemas not decorators
+                messages=self.messages
+            ) as stream:
+                
+                response = stream.get_final_message()
+                
+                # Tool call — execute and loop
+                if response.stop_reason == "tool_use":
+                    self.messages.append({
+                        "role": "assistant",
+                        "content": response.content
+                    })
+                    
+                    tool_results = []
+                    for block in response.content:
+                        if block.type == "tool_use":
+                            print(f"\n[Searching {block.name}...]", 
+                                  flush=True)
+                            result = execute_tool(block.name, block.input)
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": result
+                            })
+                    
+                    self.messages.append({
+                        "role": "user",
+                        "content": tool_results
+                    })
+                    continue
+                
+                # Final answer — stream it
+                if response.stop_reason == "end_turn":
+                    for block in response.content:
+                        if hasattr(block, 'text') and block.text:
+                            # Stream word by word
+                            for char in block.text:
+                                print(char, end="", flush=True)
+                            full_response += block.text
+                    break
+        
+        print()
+        
+        self.messages.append({
+            "role": "assistant",
+            "content": full_response
+        })
+        
+        return full_response
 
-
-
-
+def execute_tool(name: str, args: dict) -> str:
+    if name == "search_surgical_textbook":
+        print(f"[TEXTBOOK] {args['query']}")
+        results = retrieve_surgical_text(args["query"])
+        #return {"results": [r[0] for r in results]}
+        return results
+    
+    elif name == "search_cochrane_citations":
+        print(f"[COCHRANE] {args['query']}")
+        results = retrieve_cochrane(args["query"])
+        # return {"results": [{
+        #     "text": r[0],
+        #     "title": r[1].get("title"),
+        #     "year": r[1].get("year"),
+        #     "doi": r[1].get("doi")
+        # } for r in results]}
+        return results
+    
+    elif name == "calculate_bmi":
+        height = args["height"]
+        weight = args["weight"]
+        height_units = args.get("height_unit", "cm")
+        weight_units = args.get("weight_unit", "kg")
+        return calculate_bmi(height, weight, height_units, weight_units)
+    
+        #return {"bmi": round(bmi, 1), "category": category}
+    
+    return {"error": f"Unknown tool: {name}"}
 
 
 if __name__ == "__main__":
-    res = ask("what is the best treatment option for recurrent melanoma")
-    print(res) #pulling the text response so that we can use the raw response below
-                                #will have to change this at some point
+    bot = SurgicalChatbot()
+
+    print("Surgical assistant ready")
+    print("Commands: 'history', 'reset', 'quit' ")
+
+    while True:
+        question = input("You: ").strip()
+
+        if not question:
+            continue
+        elif question.lower() == 'quit':
+            break
+        elif question.lower() == 'history':
+            bot.history()
+        elif question.lower() == 'reset':
+            bot.reset()
+        else:
+            print("\nAssistant: ", end="")
+            bot.ask(question)
 
     
