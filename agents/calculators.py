@@ -59,6 +59,41 @@ def calculate_meld(params: dict) -> dict:
     return result
 
 
+def calculate_bmi(params: dict) -> dict:
+    try:
+        height_cm = float(params["height"])
+        weight_kg = float(params["weight"])
+    except (KeyError, ValueError) as e:
+        return {"error":f"Invalid input: {e}"}
+
+    if height_cm <= 0 or weight_kg <= 0:
+        return {"error":"Height and weight must be positive"}
+    
+    # Unit conversion
+    if params.get("height_unit") == "inches":
+        height_cm = height_cm * 2.54
+    if params.get("weight_unit") == "pounds":
+        weight_kg = weight_kg * 0.453592
+    
+    bmi = weight_kg / (height_cm / 100) ** 2
+    
+    category = (
+        "underweight" if bmi < 18.5 else
+        "normal" if bmi < 25 else
+        "overweight" if bmi < 30 else
+        "obese class I" if bmi < 35 else
+        "obese class II" if bmi < 40 else
+        "obese class III"
+    )
+    
+    return {
+        "bmi": round(bmi, 1),
+        "category": category,
+        "height_used_cm": round(height_cm, 1),
+        "weight_used_kg": round(weight_kg, 1)
+    }
+
+
 ###
 #function to actually call the calculator functions themselves
 

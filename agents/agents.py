@@ -6,6 +6,7 @@ from openai import OpenAI
 from pathlib import Path
 from src.chroma_db_scripts import get_surgery_text_collection, get_cochrane_collection
 from agents.agent_tools import tool_definitions
+from agents.calculators import run_calculator
 
 from dotenv import load_dotenv
 
@@ -66,19 +67,23 @@ def search_surgical_textbook(query:str) -> str:
     return json.dumps({"results": chunks})
 
 @beta_tool
-def calculate_bmi(height_cm:float, weight_kg:float, height_units:str = "cm", weight_units:str = "kg") -> float:
-    """calculate BMI from height in centimeters and weight in kilograms.
-    Accepts metric (cm, kg) or imperial (inches (in), pounds (lbs))
-    Specify height_units as 'cm' or 'inches' and weight_units as 'kg or 'pounds'
-    'in' is an abbreviation for 'inches'.  'lb' or 'lbs' is an abbreviation for 'pounds'
+def medical_calculator(calculator: str, parameters: dict) -> str:
+    """Calculate medical risk scores and measurements.
+    
+    Available calculators:
+    
+    bmi: Body mass index
+        height (number), weight (number)
+        height_unit (cm or inches, default cm)
+        weight_unit (kg or pounds, default kg)
+    
+    meld: MELD score for liver disease severity
+        creatinine (mg/dL), bilirubin (mg/dL),
+        inr, sodium (optional), dialysis (bool, optional)
     """
-
-    if height_units == 'inches':
-        height = height * 2.54
-    if weight_units == 'pounds':
-        weight = weight / 2.2
-
-    return weight / (height / 100)**2
+    print(f"\n[CALCULATOR] {calculator}: {parameters}")
+    result = run_calculator(calculator, parameters)
+    return json.dumps(result)
 
 @beta_tool
 def search_cochrane_citations(query: str) -> str:
