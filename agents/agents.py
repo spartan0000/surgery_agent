@@ -262,7 +262,7 @@ class SurgicalChatbotStreaming:
                     })
                     continue
                 
-                # Final answer — stream it
+                # Final answer
                 if response.stop_reason == "end_turn":
                     for block in response.content:
                         if hasattr(block, 'text') and block.text:
@@ -280,7 +280,40 @@ class SurgicalChatbotStreaming:
         })
         
         return full_response
+    
+    def history(self):
+        if not self.messages:
+            print("No conversation history yet")
+            return
+        print("\n=== Conversation History ===")
+        for i, msg in enumerate(self.messages):
+            role = "You" if msg["role"] == "user" else "Assistant"
+            print(f"\n[{i+1}] {role}:")
+            content = msg['content']
+            if isinstance(content, str):
+                print(content[:300])
+                if len(content) > 300:
+                    print("...")
+            else:
+                print("[tool calls/results]")
+        print("===========================")
+    
+    def reset(self):
+        self.messages = []
+        print("Conversation reset")
+    
+    def save(self, filepath: str):
+        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, 'w') as f:
+            json.dump(self.messages, f, indent=2, default=str)
+        print(f"Saved to {filepath}")
+    
+    def load(self, filepath: str):
+        with open(filepath) as f:
+            self.messages = json.load(f)
+        print(f"Loaded {len(self.messages)} messages")
 
+        
 def execute_tool(name: str, args: dict) -> str:
     if name == "search_surgical_textbook":
         print(f"[TEXTBOOK] {args['query']}")
