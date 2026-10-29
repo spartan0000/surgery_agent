@@ -34,23 +34,44 @@ outcomes and comparative evidence.""",
         }
     },
     {
-        "name": "calculate_bmi",
-        "description": "Calculate BMI from height and weight",
+        "name": "medical_calculator",
+        "description": """Calculate medical risk scores and measurements.
+        
+Available calculators:
+
+bmi: Body mass index
+    height (number), weight (number)
+    height_unit (cm or inches, default cm)
+    weight_unit (kg or pounds, default kg)
+
+meld: MELD score for liver disease severity
+    creatinine (mg/dL), bilirubin (mg/dL), inr
+    sodium (optional), dialysis (bool, optional)
+
+chads_vasc: CHA2DS2-VASc stroke risk in atrial fibrillation
+    Useful for perioperative anticoagulation decisions
+    heart_failure (bool), hypertension (bool),
+    age (years), diabetes (bool), stroke_tia (bool),
+    vascular_disease (bool), female (bool)
+
+rcri: Revised Cardiac Risk Index for surgical cardiac risk
+    high_risk_surgery (bool), ischemic_heart_disease (bool),
+    heart_failure (bool), cerebrovascular_disease (bool),
+    insulin_dependent_diabetes (bool), creatinine_gt_177 (bool)""",
         "input_schema": {
             "type": "object",
             "properties": {
-                "height": {"type": "number"},
-                "weight": {"type": "number"},
-                "height_unit": {
+                "calculator": {
                     "type": "string",
-                    "enum": ["cm", "inches"]
+                    "description": "Calculator to use",
+                    "enum": ["bmi", "meld", "chads_vasc", "rcri"]
                 },
-                "weight_unit": {
-                    "type": "string",
-                    "enum": ["kg", "pounds"]
+                "parameters": {
+                    "type": "object",
+                    "description": "Parameters for the calculator"
                 }
             },
-            "required": ["height", "weight"]
+            "required": ["calculator", "parameters"]
         }
     }
 ]

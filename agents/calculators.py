@@ -210,8 +210,9 @@ def run_calculator(name: str, params: dict) -> dict:
     
     calculators = {
         "meld": calculate_meld,
+        "bmi": calculate_bmi,
         #"child_pugh": calculate_child_pugh,
-        #"chads_vasc": calculate_chads_vasc,
+        "chads_vasc": calculate_chads_vasc,
         #"rcri": calculate_rcri
     }
     

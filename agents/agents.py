@@ -80,6 +80,13 @@ def medical_calculator(calculator: str, parameters: dict) -> str:
     meld: MELD score for liver disease severity
         creatinine (mg/dL), bilirubin (mg/dL),
         inr, sodium (optional), dialysis (bool, optional)
+
+    chads_vasc: CHA2DS2-VASc stroke risk score in atrial fibrillation
+        Useful for perioperative anticoagulation decisions
+        heart_failure (bool), hypertension (bool),
+        age (years, integer), diabetes (bool),
+        stroke_tia (bool), vascular_disease (bool),
+        female (bool)
     """
     print(f"\n[CALCULATOR] {calculator}: {parameters}")
     result = run_calculator(calculator, parameters)
@@ -110,13 +117,14 @@ SYSTEM = """You are a surgical education assistant with access to a surgical tex
 Knowledge sources:
 - Surgical textbook: operative techniques, anatomy, procedures, complications, surgical decision making
 - Cochrane reviews: high quality synthesized clinical evidence, treatment outcomes, comparative effectiveness
-- A BMI calculator function if needed
+- A medical calculator to calculate risk scores and other values to help make surgical decisions
 
 Rules:
 1. Always search the appropriate source before answering:
    - Surgical questions - search the textbook
    - Evidence or outcomes questions - search Cochrane reviews
    - Questions involving both - search both sources
+   - If a numerical score is required and the specific calculator is available, use that calculator
 2. Ground your answers in the retrieved content but use your knowledge to explain and synthesize clearly
 3. Always cite your source - textbook for operative knowledge, Cochrane review title and year for evidence
 4. If neither source contains relevant information, say so clearly
@@ -130,7 +138,7 @@ def ask(question: str) -> str:
         model = "claude-sonnet-4-6",
         max_tokens = 2048,
         system = SYSTEM,
-        tools = [search_surgical_textbook, calculate_bmi, search_cochrane_citations],
+        tools = [search_surgical_textbook, medical_calculator, search_cochrane_citations],
         messages = [{'role': 'user', 'content': question}]
     )
     response = runner.until_done()
@@ -158,7 +166,7 @@ class SurgicalChatbot:
             model="claude-sonnet-4-6",
             max_tokens=2048,
             system=SYSTEM,
-            tools=[search_surgical_textbook, search_cochrane_citations, calculate_bmi],
+            tools=[search_surgical_textbook, search_cochrane_citations, medical_calculator],
             messages=self.messages
         )
         
@@ -284,12 +292,12 @@ def execute_tool(name: str, args: dict) -> str:
         # } for r in results]}
         return results
     
-    elif name == "calculate_bmi":
-        height = args["height"]
-        weight = args["weight"]
-        height_units = args.get("height_unit", "cm")
-        weight_units = args.get("weight_unit", "kg")
-        return calculate_bmi(height, weight, height_units, weight_units)
+    elif name == "medical_calculator":
+        result = run_calculator(
+            args["calculator"],
+            args["parameters"]
+        )
+        return json.dumps(result)
     
         #return {"bmi": round(bmi, 1), "category": category}
     
