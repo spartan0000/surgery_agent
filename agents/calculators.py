@@ -94,6 +94,113 @@ def calculate_bmi(params: dict) -> dict:
     }
 
 
+
+def calculate_chads_vasc(params: dict) -> dict:
+    """
+    CHA2DS2-VASc score for stroke risk in atrial fibrillation
+    Lip et al. 2010
+    """
+    score = 0
+    criteria_met = []
+    
+    # Congestive heart failure
+    if params.get("heart_failure", False):
+        score += 1
+        criteria_met.append("heart failure")
+    
+    # Hypertension
+    if params.get("hypertension", False):
+        score += 1
+        criteria_met.append("hypertension")
+    
+    # Age ≥ 75 (2 points)
+    age = int(params.get("age", 0))
+    if age >= 75:
+        score += 2
+        criteria_met.append("age ≥ 75")
+    elif age >= 65:
+        score += 1
+        criteria_met.append("age 65-74")
+    
+    # Diabetes
+    if params.get("diabetes", False):
+        score += 1
+        criteria_met.append("diabetes")
+    
+    # Stroke/TIA/thromboembolism (2 points)
+    if params.get("stroke_tia", False):
+        score += 2
+        criteria_met.append("prior stroke/TIA")
+    
+    # Vascular disease (prior MI, PAD, aortic plaque)
+    if params.get("vascular_disease", False):
+        score += 1
+        criteria_met.append("vascular disease")
+    
+    # Sex category female
+    if params.get("female", False):
+        score += 1
+        criteria_met.append("female sex")
+    
+    # Annual stroke risk interpretation
+    stroke_risk = {
+        0: "0.2%",
+        1: "0.6%",
+        2: "2.2%",
+        3: "3.2%",
+        4: "4.8%",
+        5: "7.2%",
+        6: "9.7%",
+        7: "11.2%",
+        8: "10.8%",
+        9: "12.2%"
+    }
+
+    stroke_tia_systemic_embolism_risk = {
+        0: "0.3%",
+        1: "0.9%",
+        2: "2.9%",
+        3: "4.6%",
+        4: "6.7%",
+        5: "10.0%",
+        6: "13.6%",
+        7: "15.7%",
+        8: "15.2%",
+        9: "17.4%"
+    }
+    
+    # Anticoagulation recommendation
+    # Note: female sex alone (score=1) doesn't warrant anticoagulation
+    male_score = score - (1 if params.get("female", False) else 0)
+    
+    if male_score == 0:
+        anticoagulation = "Not recommended"
+        bridging = "No bridging needed for surgery"
+        surgical_risk = "Low — anticoagulation can be stopped"
+    elif male_score == 1:
+        anticoagulation = "Consider anticoagulation"
+        bridging = "Bridging decision based on bleeding vs thrombotic risk"
+        surgical_risk = "Low-moderate — discuss with cardiologist"
+    else:
+        anticoagulation = "Anticoagulation recommended"
+        if score >= 4:
+            bridging = "Bridging anticoagulation likely needed"
+            surgical_risk = "High — cardiology input recommended before stopping anticoagulation"
+        else:
+            bridging = "Consider bridging based on procedure bleeding risk"
+            surgical_risk = "Moderate — weigh thrombotic vs bleeding risk"
+    
+    return {
+        "score": score,
+        "annual_stroke_risk": stroke_risk.get(score, ">15%"),
+        "stroke_TIA_systemic_embolism_risk": stroke_tia_systemic_embolism_risk.get(score, ">17%"),
+        "criteria_met": criteria_met,
+        "anticoagulation_recommendation": anticoagulation,
+        "perioperative_bridging": bridging,
+        "surgical_context": surgical_risk,
+        "note": "Clinical decision requires assessment of procedural bleeding risk alongside thrombotic risk. Consult cardiology for high risk cases."
+    }
+
 ###
 #function to actually call the calculator functions themselves
 
