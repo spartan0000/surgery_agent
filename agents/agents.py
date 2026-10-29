@@ -207,6 +207,13 @@ class SurgicalChatbot:
 
 ###
 #Streaming agent - lots more code unfortunately...
+#the @beta_tool decorator does a lot under the hood apparently - extracts the schema in tool definitions automatically
+#since we're manually running the tools here, need the tool definitions in agent_tools.py so that the 
+#anthropic api knows what we're doing.  
+#tool runner also executes the tool
+#here we have an execute_tool method to manually execute the tools
+
+
 class SurgicalChatbotStreaming:
     def __init__(self):
         self.messages = []

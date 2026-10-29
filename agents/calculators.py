@@ -3,6 +3,16 @@
 import math
 import json
 
+# can't remember all the places to update each tool so here's a list
+# 
+# 1. Implement calculate_X(params: dict) -> dict
+# 2. Add "x": calculate_X to run_calculator dict
+# 3. Update @beta_tool medical_calculator docstring in agent.py
+# 4. Update tool_definitions medical_calculator in agent.py
+#    - add to enum list
+#    - add description with parameters
+
+
 def calculate_meld(params: dict) -> dict:
     """
     MELD score = 3.78 x ln(bilirubin) + 
