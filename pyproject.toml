@@ -9,5 +9,6 @@ dependencies = [
     "chromadb>=1.5.9",
     "openai>=3.37.0",
     "pandas>=3.1.0",
+    "pytest>=9.2.0",
     "python-dotenv>=1.2.4",
 ]

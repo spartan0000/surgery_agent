@@ -63,7 +63,7 @@ def calculate_meld(params: dict) -> dict:
             9.57 * math.log(creatinine) + 
             6.43)
     
-    meld = min(round(max(meld, 6), 1), 40)  # minimum score of 6 and maximum score of 40
+    meld = min(round(max(meld, 6)), 40)  # minimum score of 6 and maximum score of 40
     
     # 90-day mortality interpretation
     if meld < 10:
