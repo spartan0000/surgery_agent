@@ -38,7 +38,19 @@ def require_choice(params, key, choices):
     return value
 
 def optional_bool(params, key, default=False):
-    return bool(params.get(key, default))
+    v = params.get(key, default)
+    if isinstance(v, bool):
+        return v
+
+    if isinstance(v, str):
+        s = v.strip().lower()
+        if s in ("true", "yes", "1", "y"):
+            return True
+        if s in ("false", "yes", "0", "n"):
+            return False
+        raise CalculatorInputError(f"{key} must be true or false, got {v!r}")
+    
+    return bool(v)
 
 
 

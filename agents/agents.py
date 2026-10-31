@@ -214,6 +214,31 @@ class SurgicalChatbot:
 #here we have an execute_tool method to manually execute the tools
 
 
+#this is the function to get human confirmation of calculator in the terminal
+#for a browser, will need a different method to do this in an HTTP request - two separate requests with
+#stored state in between
+
+NEEDS_CONFIRMATION = {'medical_calculator'}
+
+def request_confirmation(self, tool_input: dict):
+    calc = tool_input["calculator"]
+    params = dict(tool_input["parameters"])
+    print(f"\n[CONFIRM {calc.upper()}]")
+    for k, v in params.items():
+        print(f"  {k}: {v}")
+    choice = input("Confirm? (y / edit / n): ").strip().lower()
+
+    if choice == "y":
+        return params
+    if choice == "edit":
+        for k in params:
+            new = input(f"  {k} [{params[k]}]: ").strip()
+            if new:
+                params[k] = new
+        return params
+    return None  # cancelled
+
+
 class SurgicalChatbotStreaming:
     def __init__(self):
         self.messages = []
@@ -239,27 +264,33 @@ class SurgicalChatbotStreaming:
                 
                 # Tool call — execute and loop
                 if response.stop_reason == "tool_use":
-                    self.messages.append({
-                        "role": "assistant",
-                        "content": response.content
-                    })
-                    
+                    self.messages.append({"role": "assistant", "content": response.content})
+
                     tool_results = []
                     for block in response.content:
-                        if block.type == "tool_use":
-                            print(f"\n[Searching {block.name}...]", 
-                                  flush=True)
-                            result = execute_tool(block.name, block.input)
-                            tool_results.append({
-                                "type": "tool_result",
-                                "tool_use_id": block.id,
-                                "content": result
-                            })
-                    
-                    self.messages.append({
-                        "role": "user",
-                        "content": tool_results
-                    })
+                        if block.type != "tool_use":
+                            continue
+
+                        print(f"\n[Calling {block.name}...]", flush=True)
+
+                        if block.name == "medical_calculator":
+                            confirmed = self.request_confirmation(block.input)
+                            if confirmed is None:
+                                content = json.dumps({"status": "cancelled_by_user"})
+                            else:
+                                content = json.dumps(
+                                    run_calculator(block.input["calculator"], confirmed)
+                                )
+                        else:
+                            content = execute_tool(block.name, block.input)
+
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": content,
+                        })
+
+                    self.messages.append({"role": "user", "content": tool_results})
                     continue
                 
                 # Final answer
@@ -313,7 +344,7 @@ class SurgicalChatbotStreaming:
             self.messages = json.load(f)
         print(f"Loaded {len(self.messages)} messages")
 
-        
+
 def execute_tool(name: str, args: dict) -> str:
     if name == "search_surgical_textbook":
         print(f"[TEXTBOOK] {args['query']}")
@@ -332,14 +363,6 @@ def execute_tool(name: str, args: dict) -> str:
         # } for r in results]}
         return results
     
-    elif name == "medical_calculator":
-        result = run_calculator(
-            args["calculator"],
-            args["parameters"]
-        )
-        return json.dumps(result)
-    
-        #return {"bmi": round(bmi, 1), "category": category}
     
     return {"error": f"Unknown tool: {name}"}
 
