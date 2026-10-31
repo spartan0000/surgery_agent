@@ -63,7 +63,7 @@ def calculate_meld(params: dict) -> dict:
             9.57 * math.log(creatinine) + 
             6.43)
     
-    meld = min(round(max(meld, 6)), 40)  # minimum score of 6 and maximum score of 40
+    meld = min(math.floor(max(meld, 6) + 0.5), 40)  # minimum score of 6 and maximum score of 40
     
     # 90-day mortality interpretation
     if meld < 10:
@@ -92,8 +92,10 @@ def calculate_meld(params: dict) -> dict:
     if params.get("sodium") is not None:
         sodium = max(min(require_number(params, "sodium", 90, 180), 137), 125) #sodium bounded between 125 and 137
         meld_na = meld + 1.32 * (137 - sodium) - (0.033 * meld * (137 - sodium))
-        result["meld_na"] = round(meld_na, 1)
+        result["meld_na"] = math.floor(meld_na + 0.5)
     
+    else:
+        result["meld"] = math.floor(meld + 0.5)
     return result
 
 
