@@ -12,6 +12,35 @@ import json
 #    - add to enum list
 #    - add description with parameters
 
+class CalculatorInputError(Exception):
+    """Raised when calculator inputs are missing or invalid."""
+    pass
+
+def require_number(params, key, min_val=None, max_val=None):
+    if key not in params or params[key] is None:
+        raise CalculatorInputError(f"Missing required parameter: {key}")
+    try:
+        value = float(params[key])
+    except (TypeError, ValueError):
+        raise CalculatorInputError(f"{key} must be a number, got {params[key]!r}")
+    if min_val is not None and value < min_val:
+        raise CalculatorInputError(f"{key}={value} is below plausible minimum {min_val}")
+    if max_val is not None and value > max_val:
+        raise CalculatorInputError(f"{key}={value} is above plausible maximum {max_val}")
+    return value
+
+def require_choice(params, key, choices):
+    if key not in params:
+        raise CalculatorInputError(f"Missing required parameter: {key}")
+    value = str(params[key]).lower()
+    if value not in choices:
+        raise CalculatorInputError(f"{key} must be one of {choices}, got {value!r}")
+    return value
+
+def optional_bool(params, key, default=False):
+    return bool(params.get(key, default))
+
+
 
 def calculate_meld(params: dict) -> dict:
     """
@@ -21,15 +50,14 @@ def calculate_meld(params: dict) -> dict:
                  6.43
     MELD-Na adds sodium correction
     """
-    creatinine = min(float(params["creatinine"]), 4.0)  # capped at 4.0
-    bilirubin = max(float(params["bilirubin"]), 1.0)    # minimum of 1.0
-    inr = max(float(params["inr"]), 1.0)
+    creatinine = min(require_number(params, "creatinine", 0.1, 30), 4.0)  # capped at 4.0
+    bilirubin = max(require_number(params, "bilirubin", 0.1, 80), 1.0)    # minimum of 1.0
+    inr = max(require_number(params, "inr", 0.5, 15), 1.0)
     
     # If on dialysis twice in past week, creatinine = 4.0
-    if params.get("dialysis"):
+    if optional_bool(params, "dialysis"):
         creatinine = 4.0
     
-    import math
     meld = (3.78 * math.log(bilirubin) + 
             11.2 * math.log(inr) + 
             9.57 * math.log(creatinine) + 
@@ -61,8 +89,8 @@ def calculate_meld(params: dict) -> dict:
         "urgency": urgency
     }
     
-    if "sodium" in params:
-        sodium = max(min(float(params["sodium"]), 137), 125) #sodium bounded between 125 and 137
+    if params.get("sodium") is not None:
+        sodium = max(min(require_number(params, "sodium", 90, 180), 137), 125) #sodium bounded between 125 and 137
         meld_na = meld + 1.32 * (137 - sodium) - (0.033 * meld * (137 - sodium))
         result["meld_na"] = round(meld_na, 1)
     
@@ -70,20 +98,20 @@ def calculate_meld(params: dict) -> dict:
 
 
 def calculate_bmi(params: dict) -> dict:
-    try:
-        height_cm = float(params["height"])
-        weight_kg = float(params["weight"])
-    except (KeyError, ValueError) as e:
-        return {"error":f"Invalid input: {e}"}
+    height_unit = require_choice({"height_unit": params.get("height_unit") or "cm"},
+                                 "height_unit", ("cm", "inches"))
+    weight_unit = require_choice({"weight_unit": params.get("weight_unit") or "kg"},
+                                 "weight_unit", ("kg", "pounds"))
 
-    if height_cm <= 0 or weight_kg <= 0:
-        return {"error":"Height and weight must be positive"}
-    
-    # Unit conversion
-    if params.get("height_unit") == "inches":
-        height_cm = height_cm * 2.54
-    if params.get("weight_unit") == "pounds":
-        weight_kg = weight_kg * 0.453592
+    # Plausible ranges depend on the unit given
+    if height_unit == "inches":
+        height_cm = require_number(params, "height", 20, 100) * 2.54
+    else:
+        height_cm = require_number(params, "height", 50, 250)
+    if weight_unit == "pounds":
+        weight_kg = require_number(params, "weight", 4, 1500) * 0.453592
+    else:
+        weight_kg = require_number(params, "weight", 2, 700)
     
     bmi = weight_kg / (height_cm / 100) ** 2
     
@@ -113,18 +141,20 @@ def calculate_chads_vasc(params: dict) -> dict:
     score = 0
     criteria_met = []
     
+    female = optional_bool(params, "female")
+
     # Congestive heart failure
-    if params.get("heart_failure", False):
+    if optional_bool(params, "heart_failure"):
         score += 1
         criteria_met.append("heart failure")
     
     # Hypertension
-    if params.get("hypertension", False):
+    if optional_bool(params, "hypertension"):
         score += 1
         criteria_met.append("hypertension")
     
     # Age ≥ 75 (2 points)
-    age = int(params.get("age", 0))
+    age = int(require_number(params, "age", 0, 120))
     if age >= 75:
         score += 2
         criteria_met.append("age ≥ 75")
@@ -133,22 +163,22 @@ def calculate_chads_vasc(params: dict) -> dict:
         criteria_met.append("age 65-74")
     
     # Diabetes
-    if params.get("diabetes", False):
+    if optional_bool(params, "diabetes"):
         score += 1
         criteria_met.append("diabetes")
     
     # Stroke/TIA/thromboembolism (2 points)
-    if params.get("stroke_tia", False):
+    if optional_bool(params, "stroke_tia"):
         score += 2
         criteria_met.append("prior stroke/TIA")
     
     # Vascular disease (prior MI, PAD, aortic plaque)
-    if params.get("vascular_disease", False):
+    if optional_bool(params, "vascular_disease"):
         score += 1
         criteria_met.append("vascular disease")
     
     # Sex category female
-    if params.get("female", False):
+    if female:
         score += 1
         criteria_met.append("female sex")
     
@@ -181,7 +211,7 @@ def calculate_chads_vasc(params: dict) -> dict:
     
     # Anticoagulation recommendation
     # Note: female sex alone (score=1) doesn't warrant anticoagulation
-    male_score = score - (1 if params.get("female", False) else 0)
+    male_score = score - (1 if female else 0)
     
     if male_score == 0:
         anticoagulation = "Not recommended"
@@ -236,7 +266,9 @@ def run_calculator(name: str, params: dict) -> dict:
     # Call the function and return result
     try:
         return calculators[name](params)
+    except CalculatorInputError as e:
+        return {"error": str(e), "calculator": name, "action": "ask_user_for_correct_value"}
     except KeyError as e:
         return {"error": f"Missing required parameter: {e}"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"Unexpected error: {e}", "calculator": name}
